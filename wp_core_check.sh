@@ -6,6 +6,19 @@ APPEND_MODE=false
 REPAIR_MODE=false
 DRY_RUN=false
 FORCE_REINSTALL=false
+WP_CLI="wp"
+
+timestamp() {
+    date '+%Y-%m-%d %H:%M:%S'
+}
+
+log() {
+    echo "[$(timestamp)] $*" | tee -a "$LOG_FILE"
+}
+
+log_only() {
+    echo "[$(timestamp)] $*" >> "$LOG_FILE"
+}
 
 # Parse flags
 for arg in "$@"; do
@@ -25,6 +38,9 @@ for arg in "$@"; do
         --log-file=*)
             LOG_FILE="${arg#*=}"
             ;;
+        --wp-cli=*)
+            WP_CLI="${arg#*=}"
+            ;;
     esac
 done
 
@@ -36,14 +52,14 @@ fi
 
 # Banner
 if $APPEND_MODE; then
-    echo "Starting core integrity check..." >> "$LOG_FILE"
+    log_only "Starting core integrity check..."
 else
-    echo "Starting core integrity check..." > "$LOG_FILE"
+    echo "[$(timestamp)] Starting core integrity check..." > "$LOG_FILE"
 fi
-echo "===============================" >> "$LOG_FILE"
-[[ $FORCE_REINSTALL == true ]] && echo "FORCE Mode: ENABLED (reinstalling WordPress core for ALL sites)" >> "$LOG_FILE"
-[[ $REPAIR_MODE == true ]] && echo "Repair Mode: ENABLED" >> "$LOG_FILE"
-[[ $DRY_RUN == true ]] && echo "Dry Run: ENABLED (no changes will be made)" >> "$LOG_FILE"
+log_only "==============================="
+[[ $FORCE_REINSTALL == true ]] && log_only "FORCE Mode: ENABLED (reinstalling WordPress core for ALL sites)"
+[[ $REPAIR_MODE == true ]] && log_only "Repair Mode: ENABLED"
+[[ $DRY_RUN == true ]] && log_only "Dry Run: ENABLED (no changes will be made)"
 echo "" >> "$LOG_FILE"
 
 # Suspicious file list (excludes legit WP core files)
@@ -70,55 +86,60 @@ for dir in "$BASE_DIR"/web[0-9]*; do
     SITE_NAME=$(basename "$dir")
     DOCROOT="$dir/web"
 
-    echo "Checking $SITE_NAME..." | tee -a "$LOG_FILE"
+    log "Checking $SITE_NAME..."
+
+    REMOVED_COUNT=0
+    BACKDOOR_COUNT=0
+    HTACCESS_DELETED=0
+    HTACCESS_RESET=false
 
     if [ -d "$DOCROOT" ]; then
         cd "$DOCROOT" || continue
 
         # If FORCE is set, skip checking and just reinstall core
         if $FORCE_REINSTALL; then
-            VERSION=$(wp core version --allow-root 2>/dev/null)
+            VERSION=$($WP_CLI core version --allow-root 2>/dev/null)
             if [[ -n "$VERSION" ]]; then
-                echo "Forcing reinstall of WordPress $VERSION for $SITE_NAME" | tee -a "$LOG_FILE"
+                log "Forcing reinstall of WordPress $VERSION for $SITE_NAME"
                 if $DRY_RUN; then
-                    echo "[Dry Run] Would run: wp core download --version=$VERSION --force --allow-root" | tee -a "$LOG_FILE"
+                    log "[Dry Run] Would run: $WP_CLI core download --version=$VERSION --force --allow-root"
                 else
-                    wp core download --version="$VERSION" --force --allow-root >> "$LOG_FILE" 2>&1
+                    $WP_CLI core download --version="$VERSION" --force --allow-root >> "$LOG_FILE" 2>&1
                 fi
             else
-                echo "[ERROR] Could not determine WP version for $SITE_NAME" | tee -a "$LOG_FILE"
+                log "[ERROR] Could not determine WP version for $SITE_NAME"
             fi
         else
-            OUTPUT=$(wp core verify-checksums --allow-root 2>&1)
+            OUTPUT=$($WP_CLI core verify-checksums --allow-root 2>&1)
 
             if echo "$OUTPUT" | grep -q "Success:"; then
-                echo -e "\e[32m[OK]\e[0m $SITE_NAME core files verified" | tee -a "$LOG_FILE"
+                log "$(echo -e "\e[32m[OK]\e[0m $SITE_NAME core files verified")"
             else
-                echo -e "\e[31m[FAIL]\e[0m $SITE_NAME may be compromised" | tee -a "$LOG_FILE"
+                log "$(echo -e "\e[31m[FAIL]\e[0m $SITE_NAME may be compromised")"
             fi
 
-            echo "$OUTPUT" | tee -a "$LOG_FILE"
+            echo "$OUTPUT" | while IFS= read -r line; do log "$line"; done
 
             if $REPAIR_MODE && echo "$OUTPUT" | grep -q "doesn't verify against checksums"; then
-                VERSION=$(wp core version --allow-root 2>/dev/null)
+                VERSION=$($WP_CLI core version --allow-root 2>/dev/null)
                 if [[ -n "$VERSION" ]]; then
-                    echo "Detected version: $VERSION" | tee -a "$LOG_FILE"
+                    log "Detected version: $VERSION"
                     if $DRY_RUN; then
-                        echo "[Dry Run] Would run: wp core download --version=$VERSION --force --allow-root" | tee -a "$LOG_FILE"
+                        log "[Dry Run] Would run: $WP_CLI core download --version=$VERSION --force --allow-root"
                     else
-                        echo "Re-downloading core files..." | tee -a "$LOG_FILE"
-                        wp core download --version="$VERSION" --force --allow-root >> "$LOG_FILE" 2>&1
+                        log "Re-downloading core files..."
+                        $WP_CLI core download --version="$VERSION" --force --allow-root >> "$LOG_FILE" 2>&1
                     fi
                 else
-                    echo "Unable to determine WP version for $SITE_NAME" | tee -a "$LOG_FILE"
+                    log "Unable to determine WP version for $SITE_NAME"
                 fi
             fi
         fi
 
         # If force was used, re-run checksum to find warnings
         if $FORCE_REINSTALL; then
-            echo "Re-checking for unexpected files after forced reinstall..." | tee -a "$LOG_FILE"
-            OUTPUT=$(wp core verify-checksums --allow-root 2>&1)
+            log "Re-checking for unexpected files after forced reinstall..."
+            OUTPUT=$($WP_CLI core verify-checksums --allow-root 2>&1)
         fi
 
         # Parse & delete rogue files from "should not exist" warnings
@@ -127,10 +148,11 @@ for dir in "$BASE_DIR"/web[0-9]*; do
             FULL_PATH="$DOCROOT/$FILE"
             if [[ -f "$FULL_PATH" ]]; then
                 if $DRY_RUN; then
-                    echo "[Dry Run] Would delete: $FULL_PATH" | tee -a "$LOG_FILE"
+                    log "[Dry Run] Would delete: $FULL_PATH"
                 else
-                    echo "Removing unexpected file: $FULL_PATH" | tee -a "$LOG_FILE"
+                    log "Removing unexpected file: $FULL_PATH"
                     rm -f "$FULL_PATH"
+                    ((REMOVED_COUNT++))
                 fi
             fi
         done
@@ -140,10 +162,11 @@ for dir in "$BASE_DIR"/web[0-9]*; do
             FILE_PATH="$DOCROOT/$F"
             if [[ -f "$FILE_PATH" ]]; then
                 if $DRY_RUN; then
-                    echo "[Dry Run] Would delete backdoor file: $FILE_PATH" | tee -a "$LOG_FILE"
+                    log "[Dry Run] Would delete backdoor file: $FILE_PATH"
                 else
-                    echo "Deleting backdoor file: $FILE_PATH" | tee -a "$LOG_FILE"
+                    log "Deleting backdoor file: $FILE_PATH"
                     rm -f "$FILE_PATH"
+                    ((BACKDOOR_COUNT++))
                 fi
             fi
         done
@@ -153,43 +176,46 @@ for dir in "$BASE_DIR"/web[0-9]*; do
         if $REPAIR_MODE || $FORCE_REINSTALL; then
             if [[ -f "$HTACCESS" ]]; then
                 if $DRY_RUN; then
-                    echo "[Dry Run] Would replace .htaccess in $SITE_NAME with standard WP config" | tee -a "$LOG_FILE"
+                    log "[Dry Run] Would replace .htaccess in $SITE_NAME with standard WP config"
                 else
-                    echo "Backing up and resetting .htaccess in $SITE_NAME" | tee -a "$LOG_FILE"
+                    log "Backing up and resetting .htaccess in $SITE_NAME"
                     cp "$HTACCESS" "$HTACCESS.bak"
                     echo "$STANDARD_HTACCESS_CONTENT" > "$HTACCESS"
+                    HTACCESS_RESET=true
                 fi
             else
                 if $DRY_RUN; then
-                    echo "[Dry Run] Would create new .htaccess in $SITE_NAME" | tee -a "$LOG_FILE"
+                    log "[Dry Run] Would create new .htaccess in $SITE_NAME"
                 else
-                    echo "Creating new standard .htaccess in $SITE_NAME" | tee -a "$LOG_FILE"
+                    log "Creating new standard .htaccess in $SITE_NAME"
                     echo "$STANDARD_HTACCESS_CONTENT" > "$HTACCESS"
+                    HTACCESS_RESET=true
                 fi
             fi
         fi
 
 	# Remove .htaccess files under wp-content/, excluding uploads/ and cache/
 	WPCONTENT="$DOCROOT/wp-content"
-	if [ -d "$WPCONTENT" ]; then
-	    echo "Scanning for rogue .htaccess files in $WPCONTENT (excluding uploads/ and cache/)" | tee -a "$LOG_FILE"
-	    find "$WPCONTENT" \( -path "$WPCONTENT/uploads" -o -path "$WPCONTENT/cache" \) -prune -o \
-	        -type f -name ".htaccess" -print | while read -r HTFILE; do
-	        if $DRY_RUN; then
-	            echo "[Dry Run] Would delete: $HTFILE" | tee -a "$LOG_FILE"
-	        else
-	            echo "Deleting rogue .htaccess: $HTFILE" | tee -a "$LOG_FILE"
-	            rm -f "$HTFILE"
-	        fi
-	    done
-	fi
+        if [ -d "$WPCONTENT" ]; then
+            log "Scanning for rogue .htaccess files in $WPCONTENT (excluding uploads/ and cache/)"
+            find "$WPCONTENT" \( -path "$WPCONTENT/uploads" -o -path "$WPCONTENT/cache" \) -prune -o -type f -name ".htaccess" -print | while read -r HTFILE; do
+                if $DRY_RUN; then
+                    log "[Dry Run] Would delete: $HTFILE"
+                else
+                    log "Deleting rogue .htaccess: $HTFILE"
+                    rm -f "$HTFILE"
+                    ((HTACCESS_DELETED++))
+                fi
+            done
+        fi
 
 
 
+        log "Summary for $SITE_NAME: removed $REMOVED_COUNT unexpected file(s), deleted $BACKDOOR_COUNT backdoor file(s), deleted $HTACCESS_DELETED rogue .htaccess file(s), htaccess reset: $( $HTACCESS_RESET && echo yes || echo no )"
         echo "" >> "$LOG_FILE"
     else
-        echo "[SKIP] $SITE_NAME has no docroot at $DOCROOT" | tee -a "$LOG_FILE"
+        log "[SKIP] $SITE_NAME has no docroot at $DOCROOT"
     fi
 done
 
-echo "All done. See $LOG_FILE for full results."
+log "All done. See $LOG_FILE for full results."
