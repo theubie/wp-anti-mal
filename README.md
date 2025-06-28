@@ -19,7 +19,7 @@
 
 ## Usage
 ```bash
-./wp_core_check.sh [--repair] [--force] [--dry-run] [--append] [--log-file=FILE] [--wp-cli=PATH] [--tidy] [--base-dir=DIR] [--docroot=DIR] [--no-symlinks]
+./wp_core_check.sh [--repair] [--force] [--dry-run] [--append] [--log-file=FILE] [--wp-cli=PATH] [--tidy] [--base-dir=DIR] [--docroot=DIR] [--no-symlinks] [--help]
 ```
 
 ### Options
@@ -33,6 +33,7 @@
 - `--base-dir=DIR` &mdash; base directory containing site folders.
 - `--docroot=DIR` &mdash; name of the docroot folder inside each site (defaults to `web`).
 - `--no-symlinks` &mdash; skip directories that are symlinks.
+- `--help` &mdash; display usage information and exit.
 
 ### Example
 ```bash

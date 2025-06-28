@@ -23,6 +23,25 @@ log_only() {
     echo "[$(timestamp)] $*" >> "$LOG_FILE"
 }
 
+print_help() {
+    cat <<EOF
+Usage: $0 [--repair] [--force] [--dry-run] [--append] [--log-file=FILE] [--wp-cli=PATH] [--tidy] [--base-dir=DIR] [--docroot=DIR] [--no-symlinks] [--help]
+
+Options:
+  --repair        reinstall missing core files and active extensions
+  --force         reinstall core for every site without verifying checksums first
+  --dry-run       print actions without making changes
+  --append        append output to the existing log file instead of overwriting it
+  --log-file=FILE path to save the log (default: /var/www/clients/client1/core-checksums-report.log)
+  --wp-cli=PATH   use a specific WP-CLI binary
+  --tidy          remove inactive themes and plugins after verification
+  --base-dir=DIR  base directory containing site folders (default: /var/www/clients/client1)
+  --docroot=DIR   name of the docroot folder inside each site (default: "web")
+  --no-symlinks   skip directories that are symlinks
+  --help          display this help and exit
+EOF
+}
+
 # Parse flags
 for arg in "$@"; do
     case $arg in
@@ -55,6 +74,10 @@ for arg in "$@"; do
             ;;
         --tidy)
             TIDY_MODE=true
+            ;;
+        --help)
+            print_help
+            exit 0
             ;;
     esac
 done
