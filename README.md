@@ -49,4 +49,4 @@ By default the script scans all directories under `/var/www/clients/client1` and
 Use `--single-docroot` to target a specific site directly. When this option is supplied, any provided `--base-dir` and `--docroot` values are ignored.
 
 ## License
-No explicit license is provided for this project.
+This project is dedicated to the public domain under the [Unlicense](LICENSE).
