@@ -99,6 +99,9 @@ for dir in "$BASE_DIR"/web[0-9]*; do
     HTACCESS_RESET=false
     THEME_DELETED=0
     PLUGIN_DELETED=0
+    THEME_REINSTALLED=0
+    PLUGIN_REINSTALLED=0
+    CORE_REINSTALLED=false
 
     if [ -d "$DOCROOT" ]; then
         cd "$DOCROOT" || continue
@@ -112,6 +115,7 @@ for dir in "$BASE_DIR"/web[0-9]*; do
                     log "[Dry Run] Would run: $WP_CLI core download --version=$VERSION --force --allow-root"
                 else
                     $WP_CLI core download --version="$VERSION" --force --allow-root >> "$LOG_FILE" 2>&1
+                    CORE_REINSTALLED=true
                 fi
             else
                 log "[ERROR] Could not determine WP version for $SITE_NAME"
@@ -136,6 +140,7 @@ for dir in "$BASE_DIR"/web[0-9]*; do
                     else
                         log "Re-downloading core files..."
                         $WP_CLI core download --version="$VERSION" --force --allow-root >> "$LOG_FILE" 2>&1
+                        CORE_REINSTALLED=true
                     fi
                 else
                     log "Unable to determine WP version for $SITE_NAME"
@@ -239,11 +244,37 @@ for dir in "$BASE_DIR"/web[0-9]*; do
             fi
         fi
 
+        if $REPAIR_MODE && $CORE_REINSTALLED; then
+            if $DRY_RUN; then
+                log "[Dry Run] Would reinstall active themes and plugins"
+                for theme in $($WP_CLI theme list --status=active --field=name --allow-root); do
+                    log "[Dry Run] Would run: $WP_CLI theme install $theme --force --allow-root"
+                done
+                for plugin in $($WP_CLI plugin list --status=active --field=name --allow-root); do
+                    log "[Dry Run] Would run: $WP_CLI plugin install $plugin --force --allow-root"
+                done
+            else
+                log "Reinstalling active themes..."
+                for theme in $($WP_CLI theme list --status=active --field=name --allow-root); do
+                    $WP_CLI theme install "$theme" --force --allow-root >> "$LOG_FILE" 2>&1
+                    ((THEME_REINSTALLED++))
+                done
+                log "Reinstalling active plugins..."
+                for plugin in $($WP_CLI plugin list --status=active --field=name --allow-root); do
+                    $WP_CLI plugin install "$plugin" --force --allow-root >> "$LOG_FILE" 2>&1
+                    ((PLUGIN_REINSTALLED++))
+                done
+            fi
+        fi
+
 
 
         SUMMARY="Summary for $SITE_NAME: removed $REMOVED_COUNT unexpected file(s), deleted $BACKDOOR_COUNT backdoor file(s), deleted $HTACCESS_DELETED rogue .htaccess file(s), htaccess reset: $( $HTACCESS_RESET && echo yes || echo no )"
         if $TIDY_MODE; then
             SUMMARY+=", themes deleted: $THEME_DELETED, plugins deleted: $PLUGIN_DELETED"
+        fi
+        if $REPAIR_MODE && $CORE_REINSTALLED; then
+            SUMMARY+=", themes reinstalled: $THEME_REINSTALLED, plugins reinstalled: $PLUGIN_REINSTALLED"
         fi
         log "$SUMMARY"
         echo "" >> "$LOG_FILE"
