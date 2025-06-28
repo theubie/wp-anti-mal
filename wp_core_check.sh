@@ -6,6 +6,7 @@ APPEND_MODE=false
 REPAIR_MODE=false
 DRY_RUN=false
 FORCE_REINSTALL=false
+TIDY_MODE=false
 WP_CLI="wp"
 
 timestamp() {
@@ -41,6 +42,9 @@ for arg in "$@"; do
         --wp-cli=*)
             WP_CLI="${arg#*=}"
             ;;
+        --tidy)
+            TIDY_MODE=true
+            ;;
     esac
 done
 
@@ -60,6 +64,7 @@ log_only "==============================="
 [[ $FORCE_REINSTALL == true ]] && log_only "FORCE Mode: ENABLED (reinstalling WordPress core for ALL sites)"
 [[ $REPAIR_MODE == true ]] && log_only "Repair Mode: ENABLED"
 [[ $DRY_RUN == true ]] && log_only "Dry Run: ENABLED (no changes will be made)"
+[[ $TIDY_MODE == true ]] && log_only "Tidy Mode: ENABLED (removing inactive themes/plugins)"
 echo "" >> "$LOG_FILE"
 
 # Suspicious file list (excludes legit WP core files)
@@ -92,6 +97,8 @@ for dir in "$BASE_DIR"/web[0-9]*; do
     BACKDOOR_COUNT=0
     HTACCESS_DELETED=0
     HTACCESS_RESET=false
+    THEME_DELETED=0
+    PLUGIN_DELETED=0
 
     if [ -d "$DOCROOT" ]; then
         cd "$DOCROOT" || continue
@@ -208,10 +215,37 @@ for dir in "$BASE_DIR"/web[0-9]*; do
                 fi
             done
         fi
+        if $TIDY_MODE; then
+            log "Inactive Themes:"
+            $WP_CLI theme list --status=inactive --allow-root | while IFS= read -r line; do log "$line"; done
+
+            log "Inactive Plugins:"
+            $WP_CLI plugin list --status=inactive --allow-root | while IFS= read -r line; do log "$line"; done
+
+            if $DRY_RUN; then
+                log "[Dry Run] Would delete inactive themes and plugins"
+            else
+                log "Deleting inactive themes..."
+                for theme in $($WP_CLI theme list --status=inactive --field=name --allow-root); do
+                    $WP_CLI theme delete "$theme" --allow-root >> "$LOG_FILE" 2>&1
+                    ((THEME_DELETED++))
+                done
+
+                log "Deleting inactive plugins..."
+                for plugin in $($WP_CLI plugin list --status=inactive --field=name --allow-root); do
+                    $WP_CLI plugin delete "$plugin" --allow-root >> "$LOG_FILE" 2>&1
+                    ((PLUGIN_DELETED++))
+                done
+            fi
+        fi
 
 
 
-        log "Summary for $SITE_NAME: removed $REMOVED_COUNT unexpected file(s), deleted $BACKDOOR_COUNT backdoor file(s), deleted $HTACCESS_DELETED rogue .htaccess file(s), htaccess reset: $( $HTACCESS_RESET && echo yes || echo no )"
+        SUMMARY="Summary for $SITE_NAME: removed $REMOVED_COUNT unexpected file(s), deleted $BACKDOOR_COUNT backdoor file(s), deleted $HTACCESS_DELETED rogue .htaccess file(s), htaccess reset: $( $HTACCESS_RESET && echo yes || echo no )"
+        if $TIDY_MODE; then
+            SUMMARY+=", themes deleted: $THEME_DELETED, plugins deleted: $PLUGIN_DELETED"
+        fi
+        log "$SUMMARY"
         echo "" >> "$LOG_FILE"
     else
         log "[SKIP] $SITE_NAME has no docroot at $DOCROOT"
