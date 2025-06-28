@@ -48,6 +48,9 @@ for arg in "$@"; do
     esac
 done
 
+# Ensure WP-CLI does not load plugins or themes to avoid errors
+WP_CLI="$WP_CLI --skip-plugins --skip-themes"
+
 if [[ -z "$LOG_FILE" ]]; then
     LOG_FILE="/var/www/clients/client1/core-checksums-report.log"
 fi
