@@ -1,6 +1,8 @@
 #!/bin/bash
 
 BASE_DIR="/var/www/clients/client1"
+DOCROOT_NAME="web"
+NO_SYMLINKS=false
 LOG_FILE=""
 APPEND_MODE=false
 REPAIR_MODE=false
@@ -41,6 +43,15 @@ for arg in "$@"; do
             ;;
         --wp-cli=*)
             WP_CLI="${arg#*=}"
+            ;;
+        --base-dir=*)
+            BASE_DIR="${arg#*=}"
+            ;;
+        --docroot=*)
+            DOCROOT_NAME="${arg#*=}"
+            ;;
+        --no-symlinks)
+            NO_SYMLINKS=true
             ;;
         --tidy)
             TIDY_MODE=true
@@ -90,9 +101,15 @@ EOF
 )
 
 # Main loop
-for dir in "$BASE_DIR"/web[0-9]*; do
+for dir in "$BASE_DIR"/*; do
+    [[ ! -d "$dir" ]] && continue
+    if $NO_SYMLINKS && [[ -L "$dir" ]]; then
+        log "[SKIP] $(basename "$dir") is a symlink"
+        continue
+    fi
+
     SITE_NAME=$(basename "$dir")
-    DOCROOT="$dir/web"
+    DOCROOT="$dir/$DOCROOT_NAME"
 
     log "Checking $SITE_NAME..."
 
@@ -107,6 +124,10 @@ for dir in "$BASE_DIR"/web[0-9]*; do
     CORE_REINSTALLED=false
 
     if [ -d "$DOCROOT" ]; then
+        if [[ ! -f "$DOCROOT/wp-config.php" ]]; then
+            log "[SKIP] $SITE_NAME missing wp-config.php in $DOCROOT"
+            continue
+        fi
         cd "$DOCROOT" || continue
 
         # If FORCE is set, skip checking and just reinstall core
