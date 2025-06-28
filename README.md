@@ -19,7 +19,7 @@
 
 ## Usage
 ```bash
-./wp_core_check.sh [--repair] [--force] [--dry-run] [--append] [--log-file=FILE] [--wp-cli=PATH] [--tidy]
+./wp_core_check.sh [--repair] [--force] [--dry-run] [--append] [--log-file=FILE] [--wp-cli=PATH] [--tidy] [--base-dir=DIR] [--docroot=DIR] [--no-symlinks]
 ```
 
 ### Options
@@ -30,6 +30,9 @@
 - `--log-file=FILE` &mdash; path to save the log (defaults to `/var/www/clients/client1/core-checksums-report.log`).
 - `--wp-cli=PATH` &mdash; use a specific WP-CLI binary.
 - `--tidy` &mdash; remove inactive themes and plugins after verification.
+- `--base-dir=DIR` &mdash; base directory containing site folders.
+- `--docroot=DIR` &mdash; name of the docroot folder inside each site (defaults to `web`).
+- `--no-symlinks` &mdash; skip directories that are symlinks.
 
 ### Example
 ```bash
@@ -40,7 +43,7 @@
 Progress and results are timestamped and written to the specified log file. Use `--append` to preserve previous logs across runs.
 
 ## Directory layout
-The script assumes a hosting structure under `/var/www/clients/client1` where each site lives in a `web*` directory containing a `web/` docroot. Edit the `BASE_DIR` variable near the top of the script if your setup differs.
+By default the script scans all directories under `/var/www/clients/client1` and expects each site to have a `web/` docroot. Both the base directory and docroot name can be changed with `--base-dir` and `--docroot`. Use `--no-symlinks` to skip any directories that are symbolic links.
 
 ## License
 No explicit license is provided for this project.
