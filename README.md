@@ -1,6 +1,6 @@
-# wpantimal
+# wp-anti-mal
 
-`wpantimal` is a Bash script that scans multiple WordPress installations for unexpected core files and known backdoors. It uses [WP-CLI](https://wp-cli.org/) to verify checksums, optionally repair installations, and tidy up unused themes and plugins.
+`wp-anti-mal` is a Bash script that scans multiple WordPress installations for unexpected core files and known backdoors. It uses [WP-CLI](https://wp-cli.org/) to verify checksums, optionally repair installations, and tidy up unused themes and plugins.
 
 ## Features
 - Verify WordPress core files with `wp core verify-checksums`.
@@ -32,7 +32,7 @@
 - `--tidy` &mdash; remove inactive themes and plugins after verification.
 - `--base-dir=DIR` &mdash; base directory containing site folders.
 - `--docroot=DIR` &mdash; name of the docroot folder inside each site (defaults to `web`).
-- `--single-docroot=DIR` &mdash; scan only the specified docroot path.
+- `--single-docroot=DIR` &mdash; scan only the specified docroot path. This overrides any values provided for `--base-dir` and `--docroot`.
 - `--no-symlinks` &mdash; skip directories that are symlinks.
 - `--help` &mdash; display usage information and exit.
 
@@ -46,7 +46,7 @@ Progress and results are timestamped and written to the specified log file. Use 
 
 ## Directory layout
 By default the script scans all directories under `/var/www/clients/client1` and expects each site to have a `web/` docroot. Both the base directory and docroot name can be changed with `--base-dir` and `--docroot`. Use `--no-symlinks` to skip any directories that are symbolic links.
-Use `--single-docroot` to target a specific site directly.
+Use `--single-docroot` to target a specific site directly. When this option is supplied, any provided `--base-dir` and `--docroot` values are ignored.
 
 ## License
 No explicit license is provided for this project.
