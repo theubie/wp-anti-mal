@@ -20,6 +20,7 @@ REPAIR_MODE=false
 DRY_RUN=false
 FORCE_REINSTALL=false
 TIDY_MODE=false
+SINGLE_DOCROOT=""
 WP_CLI="wp"
 
 timestamp() {
@@ -36,7 +37,7 @@ log_only() {
 
 print_help() {
     cat <<EOF
-Usage: $0 [--repair] [--force] [--dry-run] [--append] [--log-file=FILE] [--wp-cli=PATH] [--tidy] [--base-dir=DIR] [--docroot=DIR] [--no-symlinks] [--help]
+Usage: $0 [--repair] [--force] [--dry-run] [--append] [--log-file=FILE] [--wp-cli=PATH] [--tidy] [--base-dir=DIR] [--docroot=DIR] [--single-docroot=DIR] [--no-symlinks] [--help]
 
 Options:
   --repair        reinstall missing core files and active extensions
@@ -48,6 +49,7 @@ Options:
   --tidy          remove inactive themes and plugins after verification
   --base-dir=DIR  base directory containing site folders (default: /var/www/clients/client1)
   --docroot=DIR   name of the docroot folder inside each site (default: "web")
+  --single-docroot=DIR  scan only the specified docroot path
   --no-symlinks   skip directories that are symlinks
   --help          display this help and exit
 EOF
@@ -79,6 +81,9 @@ for arg in "$@"; do
             ;;
         --docroot=*)
             DOCROOT_NAME="${arg#*=}"
+            ;;
+        --single-docroot=*)
+            SINGLE_DOCROOT="${arg#*=}"
             ;;
         --no-symlinks)
             NO_SYMLINKS=true
@@ -134,35 +139,36 @@ RewriteRule . /index.php [L]
 EOF
 )
 
-# Main loop
-for dir in "$BASE_DIR"/*; do
-    [[ ! -d "$dir" ]] && continue
-    if $NO_SYMLINKS && [[ -L "$dir" ]]; then
-        log "[SKIP] $(basename "$dir") is a symlink"
-        continue
+scan_site() {
+    local SITE_DIR="$1"
+    local DOCROOT="$2"
+    [[ ! -d "$SITE_DIR" ]] && return
+    if $NO_SYMLINKS && [[ -L "$SITE_DIR" ]]; then
+        log "[SKIP] $(basename "$SITE_DIR") is a symlink"
+        return
     fi
 
-    SITE_NAME=$(basename "$dir")
-    DOCROOT="$dir/$DOCROOT_NAME"
+    local SITE_NAME
+    SITE_NAME=$(basename "$SITE_DIR")
 
     log "Checking $SITE_NAME..."
 
-    REMOVED_COUNT=0
-    BACKDOOR_COUNT=0
-    HTACCESS_DELETED=0
-    HTACCESS_RESET=false
-    THEME_DELETED=0
-    PLUGIN_DELETED=0
-    THEME_REINSTALLED=0
-    PLUGIN_REINSTALLED=0
-    CORE_REINSTALLED=false
+    local REMOVED_COUNT=0
+    local BACKDOOR_COUNT=0
+    local HTACCESS_DELETED=0
+    local HTACCESS_RESET=false
+    local THEME_DELETED=0
+    local PLUGIN_DELETED=0
+    local THEME_REINSTALLED=0
+    local PLUGIN_REINSTALLED=0
+    local CORE_REINSTALLED=false
 
     if [ -d "$DOCROOT" ]; then
         if [[ ! -f "$DOCROOT/wp-config.php" ]]; then
             log "[SKIP] $SITE_NAME missing wp-config.php in $DOCROOT"
-            continue
+            return
         fi
-        cd "$DOCROOT" || continue
+        cd "$DOCROOT" || return
 
         # If FORCE is set, skip checking and just reinstall core
         if $FORCE_REINSTALL; then
@@ -339,6 +345,14 @@ for dir in "$BASE_DIR"/*; do
     else
         log "[SKIP] $SITE_NAME has no docroot at $DOCROOT"
     fi
-done
+}
+
+if [[ -n "$SINGLE_DOCROOT" ]]; then
+    scan_site "$(dirname "$SINGLE_DOCROOT")" "$SINGLE_DOCROOT"
+else
+    for dir in "$BASE_DIR"/*; do
+        scan_site "$dir" "$dir/$DOCROOT_NAME"
+    done
+fi
 
 log "All done. See $LOG_FILE for full results."
