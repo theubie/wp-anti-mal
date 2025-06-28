@@ -1,5 +1,16 @@
 #!/bin/bash
 
+# 🐾 Meet PantiMal
+#     .-"      "-.
+#    /            \
+#   |   WP Anti-   |
+#   |   Malware!   |
+#   \___  🩲  ___/
+#       \ (o_o) /
+#        ( (_) )
+#      __/`---'\__    - Watching your docroots so you don't have to.
+
+
 BASE_DIR="/var/www/clients/client1"
 DOCROOT_NAME="web"
 NO_SYMLINKS=false
