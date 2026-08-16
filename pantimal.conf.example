@@ -1,0 +1,12 @@
+# Copy to /etc/pantimal.conf or ./pantimal.conf and edit.
+# This file is not required; it overrides the defaults in wp_core_check.sh.
+
+# Digest mail. Leave empty to disable.
+ALERT_EMAIL="you@example.com"
+
+# Enforce Code Snippets ownership. Leave empty to skip that check.
+# SNIPPET_OWNER_MARK="CTS-SNIPPET-OWNER:yourname"
+
+# BASE_DIR="/var/www/clients"
+# DOCROOT_NAME="web"
+# QUARANTINE_BASE="/var/log/pantimal-quarantine"
